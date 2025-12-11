@@ -17,26 +17,23 @@ def main():
     print("[INFO] Kayıt başlatılıyor...")
     print("[INFO] Çıkmak için CTRL + C")
 
-    pipeline = [
-        "gst-launch-1.0",
-        "-e",
-        "nvarguscamerasrc",
-        "!",
-        "video/x-raw(memory:NVMM),width=1280,height=720,format=NV12,framerate=30/1",
-        "!",
-        "nvv4l2h264enc",
-        "bitrate=8000000",
-        "!",
-        "h264parse",
-        "!",
-        "qtmux",
-        "!",
-        "filesink",
-        f"location={str(output_file)}",
-    ]
+    # NVIDIA Jetson resmi örneklere çok benzeyen pipeline:
+    # nvarguscamerasrc -> 1280x720@30 NV12 -> H264 encode -> MP4 dosya
+    pipeline_cmd = (
+        "gst-launch-1.0 -e "
+        "nvarguscamerasrc ! "
+        "'video/x-raw(memory:NVMM), "
+        "width=(int)1280, height=(int)720, "
+        "format=(string)NV12, framerate=(fraction)30/1' ! "
+        "nvv4l2h264enc bitrate=8000000 ! "
+        "h264parse ! "
+        "qtmux ! "
+        f"filesink location={output_file}"
+    )
 
     try:
-        proc = subprocess.Popen(pipeline)
+        # shell=True: komutu terminalde yazmışsın gibi çalıştırıyoruz
+        proc = subprocess.Popen(pipeline_cmd, shell=True)
         proc.wait()
     except KeyboardInterrupt:
         print("\n[INFO] Kayıt durduruluyor (CTRL + C)…")
