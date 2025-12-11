@@ -1,0 +1,1 @@
+print("jeston dan selamlar")
