@@ -1,36 +1,45 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
-import subprocess
+import cv2
+import time
 
-def main():
-    print("[INFO] GStreamer ile canlı görüntü başlatılıyor...")
-    print("[INFO] Pencereyi kapatmak veya CTRL+C ile çıkmak yeterli.")
+# Jetson CSI kamera pipeline
+pipeline = (
+    "nvarguscamerasrc ! "
+    "video/x-raw(memory:NVMM),width=1280,height=720,format=NV12,framerate=30/1 ! "
+    "nvvidconv ! "
+    "video/x-raw,format=BGRx ! "
+    "videoconvert ! "
+    "video/x-raw,format=BGR ! "
+    "appsink"
+)
 
-    # ÇALIŞAN KOMUT (sadece görüntü):
-    # gst-launch-1.0 nvarguscamerasrc ! 'video/x-raw(memory:NVMM),width=1280,height=720,format=NV12,framerate=30/1' ! nvvidconv ! videoconvert ! ximagesink
+print("[INFO] Kamera açılıyor...")
+cap = cv2.VideoCapture(pipeline, cv2.CAP_GSTREAMER)
 
-    pipeline_cmd = (
-        "gst-launch-1.0 "
-        "nvarguscamerasrc ! "
-        "'video/x-raw(memory:NVMM),width=1280,height=720,format=NV12,framerate=30/1' ! "
-        "nvvidconv ! "
-        "videoconvert ! "
-        "ximagesink"
-    )
+if not cap.isOpened():
+    print("[HATA] Kamera açılamadı.")
+    exit()
 
-    try:
-        proc = subprocess.Popen(pipeline_cmd, shell=True)
-        proc.wait()
-    except KeyboardInterrupt:
-        print("\n[INFO] CTRL+C ile çıkılıyor...")
-        proc.terminate()
-        try:
-            proc.wait(timeout=3)
-        except subprocess.TimeoutExpired:
-            proc.kill()
-    finally:
-        print("[INFO] Bitti.")
+print("[INFO] Kamera hazır. Çıkmak için 'q' ya da ESC.")
 
-if __name__ == "__main__":
-    main()
+while True:
+    ret, frame = cap.read()
+    if not ret:
+        print("[Uyarı] Frame okunamadı.")
+        break
+
+    # ---- ŞU AN BURADA YOLO ÇALIŞACAK ----
+    # örnek olarak FPS yazdıralım:
+    cv2.putText(frame, "YOLO test hazir", (20, 40),
+                cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
+
+    cv2.imshow("YOLO Test - Jetson CSI", frame)
+
+    key = cv2.waitKey(1) & 0xFF
+    if key == 27 or key == ord('q'):
+        break
+
+cap.release()
+cv2.destroyAllWindows()
