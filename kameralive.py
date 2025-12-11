@@ -4,16 +4,14 @@
 import cv2
 
 def main():
-    # Jetson CSI kamera için GStreamer pipeline
+    # Jetson CSI kamera için GStreamer pipeline (tırnak YOK!)
     pipeline = (
         "nvarguscamerasrc ! "
-        "video/x-raw(memory:NVMM), "
-        "width=(int)1280, height=(int)720, "
-        "format=(string)NV12, framerate=(fraction)30/1 ! "
+        "video/x-raw(memory:NVMM),width=1280,height=720,format=NV12,framerate=30/1 ! "
         "nvvidconv ! "
-        "video/x-raw, format=(string)BGRx ! "
+        "video/x-raw,format=BGRx ! "
         "videoconvert ! "
-        "video/x-raw, format=(string)BGR ! "
+        "video/x-raw,format=BGR ! "
         "appsink"
     )
 
