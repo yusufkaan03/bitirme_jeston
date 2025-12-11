@@ -30,8 +30,7 @@ while True:
         print("[Uyarı] Frame okunamadı.")
         break
 
-    # ---- ŞU AN BURADA YOLO ÇALIŞACAK ----
-    # örnek olarak FPS yazdıralım:
+    # ---- BURADA YOLO ÇALIŞACAK (şimdilik placeholder) ----
     cv2.putText(frame, "YOLO test hazir", (20, 40),
                 cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
 
