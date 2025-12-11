@@ -7,14 +7,14 @@ def main():
     print("[INFO] GStreamer ile canlı görüntü başlatılıyor...")
     print("[INFO] Pencereyi kapatmak veya CTRL+C ile çıkmak yeterli.")
 
-    # Sadece canlı görüntü, kayıt yok
-    # nvarguscamerasrc -> 1280x720@30 -> ekran (ximagesink)
+    # ÇALIŞAN KOMUT (sadece görüntü):
+    # gst-launch-1.0 nvarguscamerasrc ! 'video/x-raw(memory:NVMM),width=1280,height=720,format=NV12,framerate=30/1' ! nvvidconv ! videoconvert ! ximagesink
+
     pipeline_cmd = (
         "gst-launch-1.0 "
         "nvarguscamerasrc ! "
-        "video/x-raw(memory:NVMM),width=1280,height=720,format=NV12,framerate=30/1 ! "
+        "'video/x-raw(memory:NVMM),width=1280,height=720,format=NV12,framerate=30/1' ! "
         "nvvidconv ! "
-        "video/x-raw,format=BGRx ! "
         "videoconvert ! "
         "ximagesink"
     )
