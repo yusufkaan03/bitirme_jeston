@@ -22,7 +22,7 @@ def main():
 
     # Video yazıcı ayarı
     fourcc = cv2.VideoWriter_fourcc(*"XVID")  # .avi için
-    output_path = "kamera_5s_kayit.avi"
+    output_path = "kamera_5s_kayit1.avi"
 
     out = cv2.VideoWriter(output_path, fourcc, fps, (width, height))
 
