@@ -10,13 +10,13 @@ from ultralytics import YOLO
 def main():
     ctx = zmq.Context()
     sock = ctx.socket(zmq.SUB)
-    sock.setsockopt(zmq.RCVHWM, 1)   # kuyruk şişmesin
+    sock.setsockopt(zmq.RCVHWM, 1)
     sock.setsockopt(zmq.LINGER, 0)
     sock.connect("tcp://127.0.0.1:5555")
     sock.setsockopt_string(zmq.SUBSCRIBE, "raw")
 
     model = YOLO("yolov8n-seg.pt")
-    print("[RECV] YOLOv8-seg başladı. Çıkış: q")
+    print("[RECV] YOLOv8-seg başladı (bbox-only). Çıkış: q")
 
     fps = 0.0
     last_t = time.time()
@@ -36,19 +36,26 @@ def main():
                 msg = sock.recv_multipart()
 
             topic, header, payload = msg
-            w_str, h_str = header.decode().split(",")
+            w_str, h_str, ts_str = header.decode().split(",")
             w, h = int(w_str), int(h_str)
+            ts = float(ts_str)
 
             frame = np.frombuffer(payload, dtype=np.uint8).reshape((h, w, 3))
 
-            # ---- Nano için hafiflet ----
-            frame_small = cv2.resize(frame, (640, 360))
+            # ---- Hafif inference ayarları ----
+            # Not: Bu hala seg modeli, ama çizimde sadece bbox kullanıyoruz (plot yok)
+            results = model.predict(frame, imgsz=320, conf=0.35, verbose=False)
+            r = results[0]
 
-            results = model.predict(frame_small, imgsz=416, conf=0.25, verbose=False)
-            vis = results[0].plot()
-            vis = cv2.resize(vis, (w, h))
+            vis = frame.copy()
 
-            # ---- FPS ----
+            # ---- bbox çiz (hız için) ----
+            if r.boxes is not None and len(r.boxes) > 0:
+                for b in r.boxes:
+                    x1, y1, x2, y2 = map(int, b.xyxy[0].tolist())
+                    cv2.rectangle(vis, (x1, y1), (x2, y2), (0, 255, 0), 2)
+
+            # ---- FPS + latency ----
             now = time.time()
             dt = now - last_t
             if dt > 0:
@@ -57,12 +64,19 @@ def main():
             last_t = now
             frame_id += 1
 
-            cv2.putText(vis, f"FPS: {fps:.1f}", (20, 40),
-                        cv2.FONT_HERSHEY_SIMPLEX, 1.0, (0, 255, 0), 2)
-            cv2.putText(vis, f"frame: {frame_id}", (20, 80),
-                        cv2.FONT_HERSHEY_SIMPLEX, 1.0, (0, 255, 0), 2)
+            lat_ms = (now - ts) * 1000.0
 
-            cv2.imshow("YOLOv8-Seg (RAW IPC)", vis)
+            cv2.putText(vis, f"FPS: {fps:.1f}", (10, 30),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 0), 2)
+            cv2.putText(vis, f"frame: {frame_id}", (10, 60),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 0), 2)
+            cv2.putText(vis, f"LAT: {lat_ms:.0f} ms", (10, 90),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 0), 2)
+
+            # Büyük görmek istersen:
+            vis_big = cv2.resize(vis, (1280, 720))
+            cv2.imshow("YOLOv8 (IPC, low-lat)", vis_big)
+
             if (cv2.waitKey(1) & 0xFF) == ord("q"):
                 break
 
