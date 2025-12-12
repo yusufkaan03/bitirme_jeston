@@ -1,0 +1,57 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+
+import time
+import zmq
+import cv2
+import numpy as np
+from ultralytics import YOLO
+
+def main():
+    ctx = zmq.Context()
+    sock = ctx.socket(zmq.SUB)
+    sock.connect("tcp://127.0.0.1:5555")
+    sock.setsockopt_string(zmq.SUBSCRIBE, "frame")
+
+    # En hafif seg modeliyle başla (Nano için ideal)
+    model = YOLO("yolov8n-seg.pt")
+
+    print("[RECV] YOLOv8-seg başladı. Çıkış: q")
+
+    fps = 0.0
+    last_t = time.time()
+
+    try:
+        while True:
+            topic, payload = sock.recv_multipart()
+
+            arr = np.frombuffer(payload, dtype=np.uint8)
+            frame = cv2.imdecode(arr, cv2.IMREAD_COLOR)
+            if frame is None:
+                continue
+
+            results = model.predict(frame, imgsz=640, conf=0.25, verbose=False)
+            vis = results[0].plot()
+
+            now = time.time()
+            dt = now - last_t
+            if dt > 0:
+                inst = 1.0 / dt
+                fps = inst if fps == 0 else (0.9 * fps + 0.1 * inst)
+            last_t = now
+
+            cv2.putText(vis, f"YOLO FPS: {fps:.1f}", (20, 40),
+                        cv2.FONT_HERSHEY_SIMPLEX, 1.0, (0, 255, 0), 2)
+
+            cv2.imshow("YOLOv8-Seg (IPC)", vis)
+            if (cv2.waitKey(1) & 0xFF) == ord("q"):
+                break
+
+    finally:
+        cv2.destroyAllWindows()
+        sock.close()
+        ctx.term()
+        print("[RECV] Bitti.")
+
+if __name__ == "__main__":
+    main()
