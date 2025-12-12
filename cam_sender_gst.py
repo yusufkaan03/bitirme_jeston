@@ -11,17 +11,22 @@ from gi.repository import Gst
 
 Gst.init(None)
 
+# Daha stabil olsun diye 30 fps'e kilitlemek istersen sensor-mode=2 kullanabilirsin:
+# 1920x1080@30 -> mode 2 (senin listende öyle görünüyor)
+# Aşağıdaki pipeline 1080p30 alır, 720p'ye indirir.
 PIPELINE = (
-    "nvarguscamerasrc ! "
-    "video/x-raw(memory:NVMM),width=1280,height=720,format=NV12,framerate=30/1 ! "
-    "nvvidconv ! video/x-raw,format=BGRx ! "
+    "nvarguscamerasrc sensor-mode=2 ! "
+    "video/x-raw(memory:NVMM),width=1920,height=1080,format=NV12,framerate=30/1 ! "
+    "nvvidconv ! video/x-raw,width=1280,height=720,format=BGRx ! "
     "videoconvert ! video/x-raw,format=BGR ! "
-    "appsink name=sink emit-signals=false max-buffers=1 drop=true sync=false"
+    "appsink name=sink emit-signals=true max-buffers=1 drop=true sync=false"
 )
 
 def main():
     ctx = zmq.Context()
     sock = ctx.socket(zmq.PUB)
+    sock.setsockopt(zmq.SNDHWM, 1)   # kuyruk şişmesin
+    sock.setsockopt(zmq.LINGER, 0)
     sock.bind("tcp://127.0.0.1:5555")
     time.sleep(0.3)
 
@@ -32,11 +37,14 @@ def main():
         return
 
     pipeline.set_state(Gst.State.PLAYING)
-    print("[SENDER] GStreamer appsink başladı. Yayın: tcp://127.0.0.1:5555 (CTRL+C ile çık)")
+    print("[SENDER] Yayın başladı: tcp://127.0.0.1:5555 (CTRL+C ile çık)")
+
+    count = 0
+    t0 = time.time()
 
     try:
         while True:
-            sample = appsink.emit("try-pull-sample", 1_000_000)  # 1s timeout (ns)
+            sample = appsink.emit("try-pull-sample", 2_000_000_000)  # 2s timeout
             if sample is None:
                 continue
 
@@ -50,16 +58,16 @@ def main():
             if not ok:
                 continue
 
-            frame = np.frombuffer(mapinfo.data, dtype=np.uint8).reshape((h, w, 3))
-            # kopya al (buffer bir sonraki frame'de değişebilir)
-            frame = frame.copy()
+            frame = np.frombuffer(mapinfo.data, dtype=np.uint8).reshape((h, w, 3)).copy()
             buf.unmap(mapinfo)
 
-            # JPEG encode (OpenCV yok -> basit turbojpeg yoksa numpy'de kalırız)
-            # En pratik: imageio kullanmadan raw gönderelim:
-            # Daha hızlı ve basit: raw BGR + header gönderiyoruz
             header = f"{w},{h}".encode()
             sock.send_multipart([b"raw", header, frame.tobytes()])
+
+            count += 1
+            if count % 60 == 0:
+                dt = time.time() - t0
+                print(f"[SENDER] {count} frame gönderildi ({count/dt:.1f} fps)")
 
     except KeyboardInterrupt:
         print("\n[SENDER] Çıkılıyor...")
