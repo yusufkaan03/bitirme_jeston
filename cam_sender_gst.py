@@ -4,14 +4,12 @@
 import time
 import zmq
 import numpy as np
-
 import gi
 gi.require_version("Gst", "1.0")
 from gi.repository import Gst
 
 Gst.init(None)
 
-# 1080p@30 sensor-mode=2 al -> 640x360'a indir -> BGR -> appsink
 PIPELINE = (
     "nvarguscamerasrc sensor-mode=2 ! "
     "video/x-raw(memory:NVMM),width=1920,height=1080,format=NV12,framerate=30/1 ! "
@@ -22,28 +20,34 @@ PIPELINE = (
 
 def main():
     ctx = zmq.Context()
-    sock = ctx.socket(zmq.PUB)
+    sock = ctx.socket(zmq.PUSH)
     sock.setsockopt(zmq.SNDHWM, 1)
     sock.setsockopt(zmq.LINGER, 0)
-    sock.bind("tcp://127.0.0.1:5555")
-    time.sleep(0.3)
+    sock.bind("tcp://127.0.0.1:5556")  # yeni port
+    time.sleep(0.2)
 
     pipeline = Gst.parse_launch(PIPELINE)
     appsink = pipeline.get_by_name("sink")
     if appsink is None:
-        print("[SENDER][HATA] appsink bulunamadı.")
+        print("[SENDER][HATA] appsink yok.")
         return
 
     pipeline.set_state(Gst.State.PLAYING)
-    print("[SENDER] 640x360@30 yayın başladı: tcp://127.0.0.1:5555 (CTRL+C ile çık)")
+    print("[SENDER] PUSH yayın başladı: tcp://127.0.0.1:5556 (CTRL+C)")
 
-    count = 0
-    t0 = time.time()
+    # FPS cap
+    target_fps = 15.0
+    min_dt = 1.0 / target_fps
+    last_send = 0.0
 
     try:
         while True:
-            sample = appsink.emit("try-pull-sample", 2_000_000_000)  # 2s timeout
+            sample = appsink.emit("try-pull-sample", 2_000_000_000)
             if sample is None:
+                continue
+
+            now = time.time()
+            if now - last_send < min_dt:
                 continue
 
             buf = sample.get_buffer()
@@ -61,12 +65,10 @@ def main():
 
             ts = time.time()
             header = f"{w},{h},{ts}".encode()
-            sock.send_multipart([b"raw", header, frame.tobytes()])
 
-            count += 1
-            if count % 120 == 0:
-                dt = time.time() - t0
-                print(f"[SENDER] {count} frame ({count/dt:.1f} fps)")
+            # tek multipart mesaj
+            sock.send_multipart([header, frame.tobytes()])
+            last_send = now
 
     except KeyboardInterrupt:
         print("\n[SENDER] Çıkılıyor...")
