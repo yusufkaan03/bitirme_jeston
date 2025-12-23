@@ -69,7 +69,7 @@ def main():
                 print("[ERROR] GStreamer stream ended.")
                 break
 
-            frame = np.frombuffer(raw, dtype=np.uint8).reshape((args.h, args.w, 3))
+            frame = np.frombuffer(raw, dtype=np.uint8).reshape((args.h, args.w, 3)).copy()
 
             t_inf0 = time.perf_counter()
             res = model.predict(frame, imgsz=args.imgsz, conf=args.conf, device="cpu", verbose=False)
